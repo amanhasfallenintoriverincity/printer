@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 import io
+from printer_main import print_text
 
 # Load environment variables
 load_dotenv()
@@ -187,6 +188,8 @@ def analyze_and_recommend():
                 "content": work_row['작품 내용'],
             }
         }
+
+        print_text(work_row['작품 내용'], title=work_row['작품명'])
 
         return jsonify(response_data)
 
