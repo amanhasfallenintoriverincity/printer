@@ -26,6 +26,7 @@ function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('upload'); // 'upload' or 'camera'
+  const [showReason, setShowReason] = useState(false);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -102,6 +103,7 @@ function App() {
     setError(null);
     setName("");
     setMode('upload');
+    setShowReason(false);
     stepperRef.current.goToStep(1);
   };
 
@@ -296,9 +298,7 @@ function App() {
                 <div className="text-center space-y-1 shrink-0">
                    <h2 className="text-2xl font-bold text-primary">처방전이 도착했습니다</h2>
                    <p className="text-md text-muted-foreground">
-                      <span className="font-semibold text-foreground">{name}</span>님의 현재 기분은 
-                      <span className="font-bold text-primary mx-1">"{result.analysis.detected_emotion}"</span>
-                      인 것 같네요.
+                      <span className="font-semibold text-foreground">{name}</span>님을 위한 문학 작품입니다.
                    </p>
                 </div>
 
@@ -330,10 +330,27 @@ function App() {
                            {result.recommendation.content}
                          </ScrollReveal>
                       </div>
+                      
                       <Separator className="my-4" />
-                      <div className="bg-muted/50 p-3 rounded-lg text-xs text-muted-foreground">
-                         <p className="font-medium text-foreground mb-1">AI 감정 분석 코멘트:</p>
-                         {result.analysis.reason}
+                      
+                      <div className="flex flex-col gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setShowReason(!showReason)}
+                          className="w-full text-xs text-muted-foreground hover:text-primary self-center"
+                        >
+                          {showReason ? "분석 결과 숨기기" : "왜 이런 작품을 추천했나요?"}
+                        </Button>
+                        
+                        {showReason && (
+                          <div className="bg-muted/50 p-3 rounded-lg text-xs text-muted-foreground animate-in slide-in-from-top-2 fade-in duration-300">
+                             <p className="mb-1">
+                               감지된 감정: <span className="font-bold text-primary">"{result.analysis.detected_emotion}"</span>
+                             </p>
+                             <p>{result.analysis.reason}</p>
+                          </div>
+                        )}
                       </div>
                    </CardContent>
                 </Card>
