@@ -1,15 +1,18 @@
 import win32print
 import win32ui
 import win32con
+import os
 from PIL import Image, ImageFont, ImageDraw
 
-def print_text(text, title=None, font_size=40, line_spacing=1.5, margin_left_right=5, margin_top_bottom=10):
+def print_text(text, title=None, username=None, reason=None, font_size=40, line_spacing=1.5, margin_left_right=5, margin_top_bottom=10):
     """
     텍스트를 프린터로 출력하는 함수
 
     Args:
         text: 출력할 텍스트
         title: 제목 (선택사항, 제공시 상단에 제목과 구분선 표시)
+        username: 사용자 이름 (선택사항, 제공시 처방받는 이 표시)
+        reason: 처방 사유 (선택사항, 제공시 하단에 표시)
         font_size: 폰트 크기
         line_spacing: 줄 간격 배율
         margin_left_right: 좌우 여백 (mm 단위)
@@ -39,11 +42,17 @@ def print_text(text, title=None, font_size=40, line_spacing=1.5, margin_left_rig
         draw = ImageDraw.Draw(img)
         
         # 5. 폰트 로드
+        # backend 폴더 내의 font.ttf 사용
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        font_path = os.path.join(base_dir, 'font.ttf')
+        
         try:
-            font = ImageFont.truetype("malgun.ttf", font_size)
-        except:
+            font = ImageFont.truetype(font_path, font_size)
+            print(f"✅ 폰트 로드 성공: {font_path}")
+        except Exception as e:
+            print(f"⚠️ 커스텀 폰트 로드 실패 ({e}), 시스템 폰트로 대체합니다.")
             try:
-                font = ImageFont.truetype("arial.ttf", font_size)
+                font = ImageFont.truetype("malgun.ttf", font_size)
             except:
                 font = ImageFont.load_default()
         
@@ -97,18 +106,25 @@ def print_text(text, title=None, font_size=40, line_spacing=1.5, margin_left_rig
         # 10. 텍스트 그리기
         y_position = margin_y
 
-        # 제목이 있으면 제목과 구분선 그리기
-        if title:
-            # 제목 그리기
-            draw.text((margin_x, y_position), title, fill="black", font=font)
+        # 사용자 이름이 있으면 표시
+        if username:
+            user_text = f"처방받는 이: {username}"
+            draw.text((margin_x, y_position), user_text, fill="black", font=font)
             y_position += line_height
 
-            # 구분선 그리기 (텍스트 영역 너비만큼 대시)
+        # 제목이 있으면 제목과 구분선 그리기
+        if title:
+            # 구분선 그리기 (먼저 - 이름과 제목 사이)
             separator = "-" * int(max_width / (font_size * 0.5))  # 대략적인 대시 개수 계산
             draw.text((margin_x, y_position), separator, fill="black", font=font)
             y_position += line_height
 
-            # 제목과 본문 사이 빈 줄 추가
+            # 제목 그리기 (나중)
+            draw.text((margin_x, y_position), title, fill="black", font=font)
+            y_position += line_height
+            
+        if title or username:
+            # 제목/이름과 본문 사이 빈 줄 추가
             y_position += line_height // 2
 
         for line in lines:
@@ -120,6 +136,26 @@ def print_text(text, title=None, font_size=40, line_spacing=1.5, margin_left_rig
             if y_position > img_height - margin_y:
                 print(f"⚠️  경고: 텍스트가 용지 범위를 벗어났습니다!")
                 break
+        
+        # 처방 사유 출력 (본문 아래에)
+        if reason:
+            y_position += line_height # 본문과 간격
+            
+            # 구분선
+            separator = "-" * int(max_width / (font_size * 0.5))
+            draw.text((margin_x, y_position), separator, fill="black", font=font)
+            y_position += line_height
+            
+            # 소제목
+            draw.text((margin_x, y_position), "[처방 사유]", fill="black", font=font)
+            y_position += line_height
+            
+            # 사유 내용 (줄바꿈 처리)
+            reason_lines = wrap_text(reason, font, max_width)
+            for r_line in reason_lines:
+                draw.text((margin_x, y_position), r_line, fill="black", font=font)
+                y_position += line_height
+
         
         # 11. 이미지를 흑백으로 변환
         img = img.convert("1")

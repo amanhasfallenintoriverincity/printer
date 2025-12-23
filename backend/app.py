@@ -189,7 +189,10 @@ def analyze_and_recommend():
             }
         }
 
-        print_text(work_row['작품 내용'], title=work_row['작품명'])
+        # Get username from request (default to '익명' if not provided)
+        username = request.form.get('username', '익명')
+        
+        print_text(work_row['작품 내용'], title=work_row['작품명'], username=username, reason=reason)
 
         return jsonify(response_data)
 
