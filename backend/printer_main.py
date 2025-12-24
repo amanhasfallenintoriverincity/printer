@@ -2,21 +2,12 @@ import win32print
 import win32ui
 import win32con
 import os
+from datetime import datetime
 from PIL import Image, ImageFont, ImageDraw
 
-def print_text(text, title=None, username=None, reason=None, font_size=60, line_spacing=1.5, margin_left_right=5, margin_top_bottom=10):
+def print_text(text, title=None, username=None, reason=None, font_size=50, line_spacing=1.5, margin_left_right=5, margin_top_bottom=10):
     """
-    텍스트를 프린터로 출력하는 함수
-
-    Args:
-        text: 출력할 텍스트
-        title: 제목 (선택사항, 제공시 상단에 제목과 구분선 표시)
-        username: 사용자 이름 (선택사항, 제공시 처방받는 이 표시)
-        reason: 처방 사유 (선택사항, 제공시 하단에 표시)
-        font_size: 폰트 크기
-        line_spacing: 줄 간격 배율
-        margin_left_right: 좌우 여백 (mm 단위)
-        margin_top_bottom: 상하 여백 (mm 단위)
+    텍스트를 프린터로 출력하는 함수 (처방전 스타일 - image1.png 기반)
     """
     
     # 1. 프린터 설정
@@ -33,7 +24,6 @@ def print_text(text, title=None, username=None, reason=None, font_size=60, line_
         printer_height = hdc.GetDeviceCaps(win32con.VERTRES)
         
         # 4. 이미지 생성 (80mm x 297mm 용지, 300 DPI 기준)
-        # 1mm = 11.811 픽셀 (300 DPI 기준)
         dpi_scale = 11.811
         img_width = int(80 * dpi_scale)   # 약 945 픽셀
         img_height = int(297 * dpi_scale)  # 약 3508 픽셀
@@ -42,155 +32,160 @@ def print_text(text, title=None, username=None, reason=None, font_size=60, line_
         draw = ImageDraw.Draw(img)
         
         # 5. 폰트 로드
-        # backend 폴더 내의 font.ttf 사용
         base_dir = os.path.dirname(os.path.abspath(__file__))
         font_path = os.path.join(base_dir, 'font.ttf')
         
-        try:
-            font = ImageFont.truetype(font_path, font_size)
-            print(f"✅ 폰트 로드 성공: {font_path}")
-        except Exception as e:
-            print(f"⚠️ 커스텀 폰트 로드 실패 ({e}), 시스템 폰트로 대체합니다.")
+        def get_font(size):
             try:
-                font = ImageFont.truetype("malgun.ttf", font_size)
+                # 폰트가 굵은 버전이 따로 없다면 동일한 폰트를 크기만 조절하여 사용
+                return ImageFont.truetype(font_path, size)
             except:
-                font = ImageFont.load_default()
+                try:
+                    return ImageFont.truetype("malgun.ttf", size)
+                except:
+                    return ImageFont.load_default()
+
+        # 각 섹션별 폰트 크기 정의
+        font_title = get_font(int(font_size * 1.8))  # 제목 (매우 크게)
+        font_name = get_font(int(font_size * 1.4))   # 환자 이름 (약간 크게)
+        font_normal = get_font(font_size)           # 본문
+        font_small = get_font(int(font_size * 0.7)) # 소제목 및 날짜
         
-        # 6. 여백 설정 (mm를 픽셀로 변환)
+        # 6. 여백 설정
         margin_x = int(margin_left_right * dpi_scale)
         margin_y = int(margin_top_bottom * dpi_scale)
         max_width = img_width - (margin_x * 2)
         
-        print(f"📄 용지 크기: {img_width} x {img_height} 픽셀 (80mm x 297mm)")
-        print(f"📏 좌우 여백: {margin_left_right}mm ({margin_x}픽셀)")
-        print(f"📏 상하 여백: {margin_top_bottom}mm ({margin_y}픽셀)")
-        print(f"📝 텍스트 영역 너비: {max_width}픽셀")
-        
         # 7. 자동 줄바꿈 함수
-        def wrap_text(text, font, max_width):
+        def wrap_text(text, font, max_w):
             lines = []
             paragraphs = text.split('\n')
-            
             for paragraph in paragraphs:
                 if not paragraph.strip():
                     lines.append('')
                     continue
-                
                 words = paragraph.split(' ')
                 current_line = ''
-                
                 for word in words:
                     test_line = current_line + word + ' '
                     bbox = draw.textbbox((0, 0), test_line, font=font)
-                    width = bbox[2] - bbox[0]
-                    
-                    if width <= max_width:
+                    if (bbox[2] - bbox[0]) <= max_w:
                         current_line = test_line
                     else:
                         if current_line:
                             lines.append(current_line.rstrip())
                         current_line = word + ' '
-                
                 if current_line:
                     lines.append(current_line.rstrip())
-            
             return lines
-        
-        # 8. 텍스트 줄바꿈 처리
-        lines = wrap_text(text, font, max_width)
-        
-        # 9. 줄 높이 계산
-        bbox = draw.textbbox((0, 0), "Test", font=font)
-        line_height = int((bbox[3] - bbox[1]) * line_spacing)
-        
-        # 10. 텍스트 그리기
+
+        # 8. 그리기 시작
         y_position = margin_y
-
-        # 사용자 이름이 있으면 표시
-        if username:
-            user_text = f"처방받는 이: {username}"
-            draw.text((margin_x, y_position), user_text, fill="black", font=font)
-            y_position += line_height
-
-        # 제목이 있으면 제목과 구분선 그리기
+        
+        # --- Header ---
+        # 1) Title (Left) & Patient Name (Right)
+        # 제목 그리기
         if title:
-            # 구분선 그리기 (먼저 - 이름과 제목 사이)
-            separator = "-" * int(max_width / (font_size * 0.5))  # 대략적인 대시 개수 계산
-            draw.text((margin_x, y_position), separator, fill="black", font=font)
-            y_position += line_height
-
-            # 제목 그리기 (나중)
-            draw.text((margin_x, y_position), title, fill="black", font=font)
-            y_position += line_height
+            draw.text((margin_x, y_position), title, fill="black", font=font_title)
             
-        if title or username:
-            # 제목/이름과 본문 사이 빈 줄 추가
-            y_position += line_height // 2
+        # 환자명 레이블 및 이름 그리기 (오른쪽 정렬)
+        if username:
+            label_text = "환자명"
+            u_label_bbox = draw.textbbox((0, 0), label_text, font=font_small)
+            u_name_bbox = draw.textbbox((0, 0), username, font=font_name)
+            
+            label_x = img_width - margin_x - (u_label_bbox[2] - u_label_bbox[0])
+            name_x = img_width - margin_x - (u_name_bbox[2] - u_name_bbox[0])
+            
+            draw.text((label_x, y_position), label_text, fill="black", font=font_small)
+            draw.text((name_x, y_position + int(font_size * 0.8)), username, fill="black", font=font_name)
 
+        # 제목의 높이만큼 아래로 이동
+        title_bbox = draw.textbbox((0, 0), title if title else " ", font=font_title)
+        y_position += (title_bbox[3] - title_bbox[1]) + 15
+        
+        # 2) Info Line (문학 처방전 · 발급일)
+        today = datetime.now().strftime("%Y-%m-%d")
+        info_text = f"문학 처방전 · 발급일 {today}"
+        draw.text((margin_x, y_position), info_text, fill="black", font=font_small)
+        
+        y_position += int(font_size * 1.5)
+        
+        # 3) Separator Line
+        draw.line([(margin_x, y_position), (img_width - margin_x, y_position)], fill="black", width=2)
+        y_position += 50 # 구분선 뒤 여백
+        
+        # --- Body ---
+        lines = wrap_text(text, font_normal, max_width)
+        line_height = int(font_size * line_spacing)
+        
         for line in lines:
-            if line:  # 빈 줄이 아닐 때
-                draw.text((margin_x, y_position), line, fill="black", font=font)
+            if line:
+                draw.text((margin_x, y_position), line, fill="black", font=font_normal)
             y_position += line_height
-
-            # 용지를 벗어나면 경고
-            if y_position > img_height - margin_y:
-                print(f"⚠️  경고: 텍스트가 용지 범위를 벗어났습니다!")
+            if y_position > img_height - margin_y - 400: # 처방 이유를 위한 공간 확보
                 break
         
-        # 처방 사유 출력 (본문 아래에)
+        # --- Reason (Boxed) ---
         if reason:
-            y_position += line_height # 본문과 간격
+            y_position += 60
             
-            # 구분선
-            separator = "-" * int(max_width / (font_size * 0.5))
-            draw.text((margin_x, y_position), separator, fill="black", font=font)
-            y_position += line_height
+            # 처방 이유 텍스트 줄바꿈 (박스 내부 여백 고려)
+            reason_padding = 30
+            reason_lines = wrap_text(reason, font_normal, max_width - (reason_padding * 2))
             
-            # 소제목
-            draw.text((margin_x, y_position), "[처방 사유]", fill="black", font=font)
-            y_position += line_height
+            # 박스 높이 계산
+            reason_header_height = int(font_size * 1.2)
+            reason_box_height = (len(reason_lines) * line_height) + reason_header_height + (reason_padding * 2)
             
-            # 사유 내용 (줄바꿈 처리)
-            reason_lines = wrap_text(reason, font, max_width)
+            # 박스가 용지 하단을 넘지 않도록 조정
+            if y_position + reason_box_height > img_height - margin_y:
+                y_position = img_height - margin_y - reason_box_height
+                
+            # 박스 테두리 그리기
+            draw.rectangle(
+                [margin_x, y_position, img_width - margin_x, y_position + reason_box_height],
+                outline="black", width=2
+            )
+            
+            inner_y = y_position + reason_padding
+            # "처방 이유" 소제목
+            draw.text((margin_x + reason_padding, inner_y), "처방 이유", fill="black", font=font_small)
+            inner_y += reason_header_height
+            
+            # 사유 본문
             for r_line in reason_lines:
-                draw.text((margin_x, y_position), r_line, fill="black", font=font)
-                y_position += line_height
-
+                draw.text((margin_x + reason_padding, inner_y), r_line, fill="black", font=font_normal)
+                inner_y += line_height
         
-        # 11. 이미지를 흑백으로 변환
+        # 9. 이미지를 흑백으로 변환 및 출력
         img = img.convert("1")
         
-        # 12. 프린트 작업 시작
-        hdc.StartDoc("Text Print Job")
+        # 프린트 작업 시작
+        hdc.StartDoc("Literary Prescription")
         hdc.StartPage()
         
-        # 13. 이미지를 프린터에 그리기
         from PIL import ImageWin
         dib = ImageWin.Dib(img)
         
-        # 비율 유지하면서 프린터 크기에 맞추기
         scale = min(printer_width / img_width, printer_height / img_height)
         scaled_width = int(img_width * scale)
         scaled_height = int(img_height * scale)
         
-        # 중앙 정렬
         x = (printer_width - scaled_width) // 2
         y = (printer_height - scaled_height) // 2
         
         dib.draw(hdc.GetHandleOutput(), (x, y, x + scaled_width, y + scaled_height))
         
-        # 14. 프린트 작업 종료
         hdc.EndPage()
         hdc.EndDoc()
         hdc.DeleteDC()
         
-        print(f"✅ 프린트 출력 완료! (프린터: {printer_name})")
+        print(f"✅ 처방전 출력 완료! (프린터: {printer_name})")
         
     except Exception as e:
         print(f"❌ 프린트 오류: {e}")
-    
     finally:
-        # 15. 프린터 핸들 닫기
         win32print.ClosePrinter(hprinter)
 
 
