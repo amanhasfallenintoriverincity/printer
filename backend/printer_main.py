@@ -4,7 +4,7 @@ import win32con
 import os
 from PIL import Image, ImageFont, ImageDraw
 
-def print_text(text, title=None, username=None, reason=None, font_size=40, line_spacing=1.5, margin_left_right=5, margin_top_bottom=10):
+def print_text(text, title=None, username=None, reason=None, font_size=60, line_spacing=1.5, margin_left_right=5, margin_top_bottom=10):
     """
     텍스트를 프린터로 출력하는 함수
 

@@ -18,10 +18,13 @@ CORS(app)
 
 # Configure Gemini
 API_KEY = os.getenv("GEMINI_API_KEY")
+FALLBACK_API_KEY = os.getenv("GEMINI_API_KEY_FALLBACK")
+
 if not API_KEY:
     print("Warning: GEMINI_API_KEY not found in .env file.")
 
 client = genai.Client(api_key=API_KEY)
+fallback_client = genai.Client(api_key=FALLBACK_API_KEY) if FALLBACK_API_KEY else None
 
 # Load Data
 try:
@@ -96,23 +99,46 @@ def analyze_and_recommend():
         """
 
         # Generate response
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type=file.mimetype or 'image/jpeg'
-                ),
-                prompt_text
-            ],
-            config=types.GenerateContentConfig(
-                temperature=1,
-                top_p=0.95,
-                top_k=40,
-                max_output_tokens=8192,
-                response_mime_type="application/json",
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(
+                        data=image_bytes,
+                        mime_type=file.mimetype or 'image/jpeg'
+                    ),
+                    prompt_text
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=1,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,
+                    response_mime_type="application/json",
+                )
             )
-        )
+        except Exception as e:
+            if fallback_client:
+                print(f"Primary API key failed: {e}. Retrying with fallback key...")
+                response = fallback_client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[
+                        types.Part.from_bytes(
+                            data=image_bytes,
+                            mime_type=file.mimetype or 'image/jpeg'
+                        ),
+                        prompt_text
+                    ],
+                    config=types.GenerateContentConfig(
+                        temperature=1,
+                        top_p=0.95,
+                        top_k=40,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                    )
+                )
+            else:
+                raise e
         
         try:
             # Clean up potential markdown formatting
