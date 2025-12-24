@@ -268,77 +268,7 @@ const GlassSurface = ({
       ref={containerRef}
       className={`${glassSurfaceClasses} ${focusVisibleClasses} ${className}`}
       style={getContainerStyles()}>
-      <svg
-        className="w-full h-full pointer-events-none absolute inset-0 opacity-0 -z-10"
-        xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter
-            id={filterId}
-            colorInterpolationFilters="sRGB"
-            x="0%"
-            y="0%"
-            width="100%"
-            height="100%">
-            <feImage
-              ref={feImageRef}
-              x="0"
-              y="0"
-              width="100%"
-              height="100%"
-              preserveAspectRatio="none"
-              result="map" />
 
-            <feDisplacementMap
-              ref={redChannelRef}
-              in="SourceGraphic"
-              in2="map"
-              id="redchannel"
-              result="dispRed" />
-            <feColorMatrix
-              in="dispRed"
-              type="matrix"
-              values="1 0 0 0 0
-                      0 0 0 0 0
-                      0 0 0 0 0
-                      0 0 0 1 0"
-              result="red" />
-
-            <feDisplacementMap
-              ref={greenChannelRef}
-              in="SourceGraphic"
-              in2="map"
-              id="greenchannel"
-              result="dispGreen" />
-            <feColorMatrix
-              in="dispGreen"
-              type="matrix"
-              values="0 0 0 0 0
-                      0 1 0 0 0
-                      0 0 0 0 0
-                      0 0 0 1 0"
-              result="green" />
-
-            <feDisplacementMap
-              ref={blueChannelRef}
-              in="SourceGraphic"
-              in2="map"
-              id="bluechannel"
-              result="dispBlue" />
-            <feColorMatrix
-              in="dispBlue"
-              type="matrix"
-              values="0 0 0 0 0
-                      0 0 0 0 0
-                      0 0 1 0 0
-                      0 0 0 1 0"
-              result="blue" />
-
-            <feBlend in="red" in2="green" mode="screen" result="rg" />
-            <feBlend in="rg" in2="blue" mode="screen" result="output" />
-            <feGaussianBlur ref={gaussianBlurRef} in="output" stdDeviation="0.7" />
-          </filter>
-        </defs>
-      </svg>
       <div
         className={`w-full h-full rounded-[inherit] relative z-10 ${innerClassName}`}>
         {children}
