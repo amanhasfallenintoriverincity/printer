@@ -16,15 +16,31 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Configure Gemini
-API_KEY = os.getenv("GEMINI_API_KEY")
-FALLBACK_API_KEY = os.getenv("GEMINI_API_KEY_FALLBACK")
+# Configure Gemini Keys
+api_keys = []
+# Primary key
+if os.getenv("GEMINI_API_KEY"):
+    api_keys.append(os.getenv("GEMINI_API_KEY"))
 
-if not API_KEY:
-    print("Warning: GEMINI_API_KEY not found in .env file.")
+# Numbered keys (e.g., GEMINI_API_KEY_2, GEMINI_API_KEY_3...)
+i = 2
+while True:
+    key = os.getenv(f"GEMINI_API_KEY_{i}")
+    if key:
+        api_keys.append(key)
+        i += 1
+    else:
+        break
 
-client = genai.Client(api_key=API_KEY)
-fallback_client = genai.Client(api_key=FALLBACK_API_KEY) if FALLBACK_API_KEY else None
+# Fallback key (legacy support)
+if os.getenv("GEMINI_API_KEY_FALLBACK"):
+    api_keys.append(os.getenv("GEMINI_API_KEY_FALLBACK"))
+
+# Remove duplicates while preserving order
+api_keys = list(dict.fromkeys(api_keys))
+
+if not api_keys:
+    print("Warning: No GEMINI_API_KEY found in .env file.")
 
 # Load Data
 try:
@@ -98,29 +114,16 @@ def analyze_and_recommend():
         }}
         """
 
-        # Generate response
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[
-                    types.Part.from_bytes(
-                        data=image_bytes,
-                        mime_type=file.mimetype or 'image/jpeg'
-                    ),
-                    prompt_text
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=1,
-                    top_p=0.95,
-                    top_k=40,
-                    max_output_tokens=8192,
-                    response_mime_type="application/json",
-                )
-            )
-        except Exception as e:
-            if fallback_client:
-                print(f"Primary API key failed: {e}. Retrying with fallback key...")
-                response = fallback_client.models.generate_content(
+        # Generate response with API key rotation
+        response = None
+        last_exception = None
+        
+        for key in api_keys:
+            try:
+                # Initialize client with current key
+                current_client = genai.Client(api_key=key)
+                
+                response = current_client.models.generate_content(
                     model="gemini-2.5-flash",
                     contents=[
                         types.Part.from_bytes(
@@ -137,8 +140,19 @@ def analyze_and_recommend():
                         response_mime_type="application/json",
                     )
                 )
+                # If we get here, it succeeded
+                print(f"Successfully used API key ending in ...{key[-4:] if len(key) > 4 else key}")
+                break
+            except Exception as e:
+                print(f"API key ending in ...{key[-4:] if len(key) > 4 else key} failed: {e}")
+                last_exception = e
+                continue
+        
+        if response is None:
+            if last_exception:
+                raise last_exception
             else:
-                raise e
+                raise Exception("No valid Gemini API keys available.")
         
         try:
             # Clean up potential markdown formatting
